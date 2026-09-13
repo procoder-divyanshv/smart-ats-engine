@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Resume Matcher</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>body { font-family: 'Inter', sans-serif; }</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <div class="max-w-6xl mx-auto px-4 py-10">
+    <div class="text-center mb-8">
+      <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
+        AI Resume Evaluator
+      </h1>
+      <p class="text-slate-400 mt-2">Rank resumes against job requirements using Groq LLM</p>
+    </div>
+
+    <form id="evalForm" class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+      <div>
+        <label class="block text-sm font-medium text-slate-300 mb-2">Job Description</label>
+        <textarea id="jd" rows="10" required placeholder="Paste full job description here..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none font-mono"></textarea>
+      </div>
+
+      <div class="flex flex-col justify-between">
+        <div>
+          <label class="block text-sm font-medium text-slate-300 mb-2">Upload Resumes (.pdf, .docx)</label>
+          <div class="border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl p-6 text-center cursor-pointer relative bg-slate-950/50">
+            <input id="resumeFiles" type="file" multiple accept=".pdf,.docx" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" required />
+            <p class="text-sm text-slate-300">Click or drag & drop files here</p>
+            <p class="text-xs text-slate-500 mt-1">Select multiple resumes</p>
+          </div>
+          <div id="fileList" class="mt-3 max-h-36 overflow-y-auto space-y-1 text-xs text-indigo-300"></div>
+        </div>
+
+        <button type="submit" id="submitBtn" class="w-full mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition">
+          Evaluate & Rank Candidates
+        </button>
+      </div>
+    </form>
+
+    <div id="results" class="mt-10 space-y-4"></div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById('resumeFiles');
+    const fileList = document.getElementById('fileList');
+    const form = document.getElementById('evalForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const resultsContainer = document.getElementById('results');
+
+    fileInput.addEventListener('change', () => {
+      fileList.innerHTML = '';
+      Array.from(fileInput.files).forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'bg-slate-950 px-2 py-1 rounded border border-slate-800';
+        item.textContent = `• ${f.name}`;
+        fileList.appendChild(item);
+      });
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Evaluating Resumes...';
+      resultsContainer.innerHTML = '<p class="text-center text-slate-400 animate-pulse">Running LLM evaluation pipeline...</p>';
+
+      const formData = new FormData();
+      formData.append('job_description', document.getElementById('jd').value);
+      for (const file of fileInput.files) {
+        formData.append('files', file);
+      }
+
+      try {
+        const res = await fetch('/api/evaluate', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Evaluation failed');
+
+        resultsContainer.innerHTML = `<h2 class="text-2xl font-bold mb-4">Ranked Results (${data.length})</h2>`;
+        data.forEach((c, idx) => {
+          resultsContainer.innerHTML += `
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-4 shadow">
+              <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-3">
+                <div>
+                  <span class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Rank #${idx + 1}</span>
+                  <h3 class="text-lg font-semibold text-white">${c.candidate_name}</h3>
+                  <p class="text-xs text-slate-400">${c.filename}</p>
+                </div>
+                <div class="text-2xl font-black ${c.score >= 70 ? 'text-emerald-400' : 'text-amber-400'}">${c.score}%</div>
+              </div>
+              <p class="text-sm text-slate-300 mb-3"><span class="font-semibold text-slate-200">Verdict:</span> ${c.details.final_verdict}</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                <div class="bg-slate-950 p-2.5 rounded border border-slate-800">
+                  <span class="text-emerald-400 font-semibold block mb-1">Matched Skills:</span>
+                  ${(c.details.matching_technical_skills || []).join(', ') || 'None'}
+                </div>
+                <div class="bg-slate-950 p-2.5 rounded border border-slate-800">
+                  <span class="text-rose-400 font-semibold block mb-1">Missing Skills:</span>
+                  ${(c.details.missing_critical_skills || []).join(', ') || 'None'}
+                </div>
+              </div>
+            </div>
+          `;
+        });
+      } catch (err) {
+        resultsContainer.innerHTML = `<div class="p-4 bg-red-950/50 border border-red-800 text-red-300 rounded-xl">${err.message}</div>`;
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Evaluate & Rank Candidates';
+      }
+    });
+  </script>
+</body>
+</html>
