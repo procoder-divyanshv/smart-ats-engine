@@ -16,7 +16,7 @@ if not my_api_key:
     raise ValueError("GROQ_API_KEY is not fetchable.")
 
 client = Groq(api_key=my_api_key)
-model = "openai/gpt-oss-120b"
+model = "openai/gpt-oss-20b"
 
 # --- Define Pydantic Models (Schemas) ---
 class JobD(BaseModel):
